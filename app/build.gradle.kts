@@ -18,7 +18,7 @@ android {
     buildToolsVersion = "34.0.0"
 
     defaultConfig {
-        applicationId  = "com.osfans.trime"
+        applicationId  = "aisrf.com"
         minSdk = 21
         targetSdk = 33
         versionCode = 20240301

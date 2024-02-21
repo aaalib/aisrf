@@ -20,8 +20,8 @@
 -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <!-- 輸入法平臺名稱  -->
-    <string name="app_name_release">同文輸入法</string>
-    <string name="app_name_debug">同文輸入法（除錯模式）</string>
+    <string name="app_name_release">AI輸入法</string>
+    <string name="app_name_debug">AI輸入法（除錯模式）</string>
     <!-- Preference settings -->
     <string name="settings__help_title">尋求幫助</string>
     <string name="pref_wiki">維基教程</string>
@@ -43,9 +43,9 @@
     <string name="about__privacy_policy">隱私權政策</string>
     <string name="about__build_info_format">建構者：%1$s\nGit 倉庫：%2$s\n建構 Git 雜湊值：%3$s\n建構時間：%4$s</string>
     <string name="pref_enable">啓用</string>
-    <string name="pref_enable_summary">啓用同文輸入法平臺</string>
+    <string name="pref_enable_summary">啓用AI輸入法平臺</string>
     <string name="pref_select">選取軟鍵盤</string>
-    <string name="pref_select_summary">選取同文輸入法平臺</string>
+    <string name="pref_select_summary">選取AI輸入法平臺</string>
     <string name="looks__selected_theme_title">主題</string>
     <string name="looks__selected_theme_summary">選取想要的主題</string>
     <string name="pref_select_schemas">選擇方案</string>
@@ -89,7 +89,7 @@
     </string-array>
     <string name="keyboard__soft_cursor_title">懸浮窗編碼區使用插入符號(^)</string>
     <string name="pref_deploy">部署</string>
-    <string name="pref_deploy_summary">修改設定後需要再次部署同文輸入法平臺</string>
+    <string name="pref_deploy_summary">修改設定後需要再次部署AI輸入法平臺</string>
     <string name="profile_sync_user_data">同步使用者資料</string>
     <string name="profile_sync_user_data_summary">備份配置檔案和同步使用者詞典</string>
     <string name="reset_success">回廠成功</string>
@@ -152,23 +152,23 @@
     <string name="keyboard__hook_candidate">點擊候選詞</string>
     <string name="keyboard__hook_candidate_commit">點擊候選詞後，模擬空格鍵完成上屏(暫未實現)</string>
     <string name="trime_app_slogan">擊響中文之韻</string>
-    <string name="external_storage_access_required">同文輸入法需要儲存許可權以部署或讀取方案和配置，點選“確定”前往授權。</string>
+    <string name="external_storage_access_required">AI輸入法需要儲存許可權以部署或讀取方案和配置，點選“確定”前往授權。</string>
     <string name="external_storage_permission_not_available">儲存許可權不可用</string>
     <string name="external_storage_permission_granted">已授予儲存許可權</string>
     <string name="external_storage_permission_denied">已拒絕授權儲存許可權，部署或讀取方案和配置功能或不可用</string>
-    <string name="alert_window_access_required">同文輸入法需要允許顯示在其他應用上方以能顯示應用外懸浮窗或對話方塊，點選“確定”以授權。</string>
+    <string name="alert_window_access_required">AI輸入法需要允許顯示在其他應用上方以能顯示應用外懸浮窗或對話方塊，點選“確定”以授權。</string>
     <string name="keyboard__key_sound_package_title">按鍵音效包</string>
     <string name="sound_progress">正在應用音效...</string>
     <string name="clipboard_draft_limit">草稿箱歷史記錄上限</string>
     <string name="clipboard_draft_output_title">草稿箱過濾規則</string>
     <string name="setup__next">下一步</string>
     <string name="setup__done">完成</string>
-    <string name="setup__enable_ime_hint">在語言和輸入設定中啟用<b>同文輸入法</b></string>
-    <string name="setup__select_ime_hint">選擇<b>同文輸入法</b>作為預設輸入法</string>
+    <string name="setup__enable_ime_hint">在語言和輸入設定中啟用<b>AI輸入法</b></string>
+    <string name="setup__select_ime_hint">選擇<b>AI輸入法</b>作為預設輸入法</string>
     <string name="setup__enable_ime">啟用輸入法</string>
     <string name="setup__select_ime">選擇輸入法</string>
     <string name="setup__prev">上一步</string>
-    <string name="setup__channel_hint">同文輸入法設定嚮導</string>
+    <string name="setup__channel_hint">AI輸入法設定嚮導</string>
     <string name="setup__notify_hint">請完成鍵盤設定</string>
     <string name="setup__step_one">第 1 步</string>
     <string name="setup__step_two">第 2 步</string>

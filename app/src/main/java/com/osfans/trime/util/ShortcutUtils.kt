@@ -45,11 +45,31 @@ object ShortcutUtils {
             "date" -> return getDate(option)
             "commit" -> return option
             "run" -> startIntent(option)
+            "run_app" -> runApp(option)
             "share_text" -> Trime.getService().shareText()
             "liquid_keyboard" -> Trime.getService().selectLiquidKeyboard(option)
             else -> startIntent(command, option)
         }
         return null
+    }
+
+    private fun runApp(arg: String) {
+        val splitArg = arg.split("<@>")
+        if (splitArg.size >= 2) {
+            val argArr = splitArg[0].split("<?>")
+            val appIntent = IntentUtils.getLaunchAppIntent(argArr[0])
+            if (appIntent != null) {
+//                appIntent.flags = (Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY)
+//                ActivityUtils.startActivity(appIntent)
+                appIntent.putExtra("args", argArr[1]) // 将参数放入Intent中
+                appIntent.flags = (Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY)
+                ActivityUtils.startActivity(appIntent)
+            } else {
+                val webIntent = Intent.parseUri(splitArg[1], Intent.URI_INTENT_SCHEME)
+                webIntent.flags = (Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY)
+                ActivityUtils.startActivity(webIntent)
+            }
+        }
     }
 
     private fun startIntent(arg: String) {

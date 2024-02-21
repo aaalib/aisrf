@@ -20,8 +20,8 @@
 -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <!-- 输入法平台名称  -->
-    <string name="app_name_release">同文输入法</string>
-    <string name="app_name_debug">同文输入法（调试）</string>
+    <string name="app_name_release">AI输入法</string>
+    <string name="app_name_debug">AI输入法（调试）</string>
     <string name="settings__help_title">寻求帮助</string>
     <string name="pref_wiki">维基教程</string>
     <string name="pref_issues">问题反馈</string>
@@ -42,9 +42,9 @@
     <string name="about__privacy_policy">隐私策略</string>
     <string name="about__build_info_format">构建者：%1$s\nGit 仓库：%2$s\n构建 Git 哈希：%3$s\n构建时间：%4$s</string>
     <string name="pref_enable">启用</string>
-    <string name="pref_enable_summary">启用同文输入法</string>
+    <string name="pref_enable_summary">启用AI输入法</string>
     <string name="pref_select">选取软键盘</string>
-    <string name="pref_select_summary">选取同文输入法</string>
+    <string name="pref_select_summary">选取AI输入法</string>
     <string name="looks__selected_theme_title">主题</string>
     <string name="looks__selected_theme_summary">选取主题</string>
     <string name="pref_select_schemas">选择方案</string>
@@ -85,7 +85,7 @@
     </string-array>
     <string name="keyboard__soft_cursor_title">悬浮窗编码区使用插入符号(^)</string>
     <string name="pref_deploy">部署</string>
-    <string name="pref_deploy_summary">修改设置后需要再次部署同文输入法平台</string>
+    <string name="pref_deploy_summary">修改设置后需要再次部署AI输入法平台</string>
     <string name="profile_sync_user_data">同步用户数据</string>
     <string name="reset_success">重置成功</string>
     <string name="reset_failure">重置失败</string>
@@ -100,7 +100,7 @@
     <string name="pref_other">其他设置</string>
     <string name="other__show_status_bar_icon_title">显示通知栏图标</string>
     <string name="other__destroy_on_quit_title">退出时清除缓存</string>
-    <string name="pref_themes_name_tongwenfeng">同文风</string>
+    <string name="pref_themes_name_tongwenfeng">AI风</string>
     <string name="pref_themes_name_trime">默认</string>
     <string name="profile_shared_data_dir">共享文件夹</string>
     <string name="profile_user_data_dir">用户文件夹</string>
@@ -147,19 +147,19 @@
     <string name="keyboard__key_swipe_travel_title">触发按键滑动手势的距离</string>
     <string name="keyboard__hook_candidate">点击候选词</string>
     <string name="keyboard__hook_candidate_commit">点击候选词后，模拟空格键完成上屏(暂未实现)</string>
-    <string name="trime_app_slogan">击响中文之韵</string>
-    <string name="external_storage_access_required">同文输入法需要存储权限以部署或读取方案和配置，点击“确定”前往授权。</string>
+    <string name="trime_app_slogan">飞程AI输入法</string>
+    <string name="external_storage_access_required">AI输入法需要存储权限以部署或读取方案和配置，点击“确定”前往授权。</string>
     <string name="external_storage_permission_not_available">存储权限不可用</string>
     <string name="external_storage_permission_granted">已授予存储权限</string>
     <string name="external_storage_permission_denied">已拒绝授权存储权限，部署或读取方案和配置功能或不可用</string>
-    <string name="alert_window_access_required">同文输入法需要允许显示在其他应用上方以能显示应用外悬浮窗或对话框，点击“确定”以授权。</string>
+    <string name="alert_window_access_required">AI输入法需要允许显示在其他应用上方以能显示应用外悬浮窗或对话框，点击“确定”以授权。</string>
     <string name="keyboard__key_sound_package_title">按键音效包</string>
     <string name="sound_progress">正在应用音效...</string>
     <string name="clipboard_draft_limit">草稿箱历史记录上限</string>
     <string name="clipboard_draft_output_title">草稿箱过滤规则</string>
     <string name="setup__next">下一步</string>
     <string name="setup__done">完成</string>
-    <string name="setup__enable_ime_hint">在语言和输入设置中启用<b>同文输入法</b></string>
+    <string name="setup__enable_ime_hint">在语言和输入设置中启用<b>AI输入法</b></string>
     <string name="setup__select_ime_hint">选择<b>同文输入法</b>作为默认输入法</string>
     <string name="setup__enable_ime">启用输入法</string>
     <string name="setup__select_ime">选择输入法</string>

@@ -8,7 +8,7 @@
         app:title="@string/clipboard">
         <com.osfans.trime.ui.components.DialogSeekBarPreference
             app:key="clipboard_clipboard_limit"
-            android:defaultValue="10"
+            android:defaultValue="100"
             app:iconSpaceReserved="false"
             app:max="100"
             app:systemDefaultValue="0"
@@ -42,7 +42,7 @@
         <com.osfans.trime.ui.components.DialogSeekBarPreference
             app:key="clipboard_draft_limit"
             app:iconSpaceReserved="false"
-            android:defaultValue="10"
+            android:defaultValue="100"
             app:max="100"
             app:systemDefaultValue="0"
             app:systemDefaultValueText="@string/disable"
