@@ -1,3 +1,7 @@
+项目联系方式：zgq3337@foxmail.com
+
+这是基于开源trime项目修改的项目
+
 # 同文安卓輸入法平臺/Trime/android-rime
 [![自動編譯](https://travis-ci.org/osfans/trime.svg?branch=develop)](https://travis-ci.org/osfans/trime)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](http://www.gnu.org/licenses/gpl-3.0)
