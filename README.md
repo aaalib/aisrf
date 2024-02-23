@@ -1,6 +1,6 @@
 项目联系方式：zgq3337@foxmail.com
 
-## 鸣谢/鳴謝/Credits
+## 鳴謝/Credits
 
 这是基于开源[RIME](http://rime.im)项目修改的项目
 
