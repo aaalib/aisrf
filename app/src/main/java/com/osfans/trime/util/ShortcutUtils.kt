@@ -53,6 +53,11 @@ object ShortcutUtils {
         return null
     }
 
+/**
+*    增加调用APP接口：
+*    添加人：zgq3337
+*    联系方式：zgq3337@qq.com
+ */
     private fun runApp(arg: String) {
         val splitArg = arg.split("<@>")
         if (splitArg.size >= 2) {
