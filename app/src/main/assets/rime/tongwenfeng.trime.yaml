@@ -108,6 +108,7 @@ style:
     default: Enter   # 定义默认Enter键的文本
 
 fallback_colors:
+<<<<<<< HEAD
   candidate_text_color: text_color
   comment_text_color: candidate_text_color
   border_color: back_color
@@ -142,6 +143,45 @@ fallback_colors:
   liquid_keyboard_background: keyboard_back_color # liquidKeyboard的背景图/色
   text_back_color: back_color #编码区背景，即悬浮窗背景
   long_text_back_color: key_back_color #长文本按键的背景(剪贴板）
+=======
+# 以下值是程序内置的，你也可以在这里自定义，这会覆盖默认值
+#
+#  candidate_text_color: text_color
+#  comment_text_color: candidate_text_color
+#  border_color: back_color
+#  candidate_separator_color: border_color
+#  hilited_text_color: text_color
+#  hilited_back_color: back_color
+#  hilited_candidate_text_color: hilited_text_color
+#  hilited_candidate_back_color: hilited_back_color
+#  hilited_label_color: hilited_candidate_text_color # 高亮候选序号 颜色
+#  hilited_comment_text_color: comment_text_color
+#  hilited_key_back_color: hilited_candidate_back_color
+#  hilited_key_text_color: hilited_candidate_text_color
+#  hilited_key_symbol_color: hilited_comment_text_color
+#  hilited_off_key_back_color: hilited_key_back_color
+#  hilited_on_key_back_color: hilited_key_back_color
+#  hilited_off_key_text_color: hilited_key_text_color
+#  hilited_on_key_text_color: hilited_key_text_color
+#  key_back_color: back_color
+#  key_border_color: border_color
+#  key_text_color: candidate_text_color
+#  key_symbol_color: comment_text_color
+#  label_color: candidate_text_color
+#  off_key_back_color: key_back_color
+#  off_key_text_color: key_text_color
+#  on_key_back_color: hilited_key_back_color
+#  on_key_text_color: hilited_key_text_color
+#  preview_back_color: key_back_color
+#  preview_text_color: key_text_color
+#  shadow_color: border_color
+#  root_background: back_color # 整个键盘区+候选栏的背景图/色
+#  candidate_background: back_color #候选栏的整体背景图/色
+#  keyboard_back_color: border_color #键盘区的背景图/色
+#  liquid_keyboard_background: keyboard_back_color # liquidKeyboard的背景图/色
+#  text_back_color: back_color #编码区背景，即悬浮窗背景
+#  long_text_back_color: key_back_color #长文本按键的背景(剪贴板）
+>>>>>>> c5ff32480d901210a9ff36f7ef4c4311e0936f9e
 
 #颜色
 colors:
@@ -873,7 +913,11 @@ liquid_keyboard:
   single_width: 60    #single类型的按键宽度
   vertical_gap: 8     #纵向按键间隙
   margin_x: 2       #左右按键间隙的1/2
+<<<<<<< HEAD
   keyboards: [exit, clipboard,history, draft,  collection, emoji, math, ascii, cn,symbollist, list, ids, symbol, tabs,  pinyin, script_symbols, jp, grease, rusa, korea, lation, yinbiao, unit, yanwenzi, combing, emoji_full, candidate]  #tab列表
+=======
+  keyboards: [emoji, math, ascii, cn, history, clipboard, collection, draft, symbollist, list, ids, symbol, tabs, exit, pinyin, script_symbols, jp, grease, rusa, korea, lation, yinbiao, unit, yanwenzi, combing, emoji_full, candidate]  #tab列表
+>>>>>>> c5ff32480d901210a9ff36f7ef4c4311e0936f9e
   exit:
     name: 返回
     type: NO_KEY

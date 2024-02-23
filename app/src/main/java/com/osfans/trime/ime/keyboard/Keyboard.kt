@@ -18,10 +18,10 @@
 package com.osfans.trime.ime.keyboard
 
 import android.content.res.Configuration
-import android.graphics.drawable.Drawable
 import android.view.KeyEvent
 import com.blankj.utilcode.util.ScreenUtils
 import com.osfans.trime.data.AppPrefs.Companion.defaultInstance
+import com.osfans.trime.data.theme.EventManager
 import com.osfans.trime.data.theme.Theme
 import com.osfans.trime.data.theme.ThemeManager
 import com.osfans.trime.util.CollectionUtils.obtainBoolean
@@ -54,9 +54,6 @@ class Keyboard() {
     var roundCorner: Float
         private set
 
-    /** 鍵盤背景  */
-    var background: Drawable?
-        private set
     // 鍵盤的Shift鍵是否按住
     // private boolean mShifted;
 
@@ -143,7 +140,7 @@ class Keyboard() {
             key.width = keyWidth
             key.height = keyHeight
             key.gap = horizontalGap
-            key.events[0] = Event(this, element.toString())
+            key.events[0] = EventManager.getEvent(element.toString())
             column++
             x += key.width + key.gap
             mKeys.add(key)
@@ -154,16 +151,26 @@ class Keyboard() {
         height = y + keyHeight
     }
 
-    constructor(name: String?) : this() {
+    private fun getKeyboardConfig(name: String): Map<String, Any?>? {
         val theme = ThemeManager.activeTheme
-        val keyboardConfig: Map<String, Any?>?
-        val v = theme.keyboards.getObject(name!!)
-        keyboardConfig =
+        val v = theme.keyboards.getObject(name)
+        val keyboardConfig =
             if (v != null) {
                 v as Map<String, Any?>?
             } else {
                 theme.keyboards.getObject("default") as Map<String, Any?>?
             }
+        val importPreset = keyboardConfig?.get("import_preset") as String?
+        if (importPreset != null) {
+            return getKeyboardConfig(importPreset)
+        }
+        return keyboardConfig
+    }
+
+    constructor(name: String) : this() {
+        val theme = ThemeManager.activeTheme
+        val keyboardConfig = getKeyboardConfig(name)
+
         mLabelTransform = obtainString(keyboardConfig, "label_transform", "none")
         mAsciiMode = obtainInt(keyboardConfig, "ascii_mode", 1)
         if (mAsciiMode == 0) asciiKeyboard = obtainString(keyboardConfig, "ascii_keyboard", "")
@@ -195,26 +202,30 @@ class Keyboard() {
         horizontalGap =
             sp2px(
                 obtainFloat(
-                    keyboardConfig, "horizontal_gap", theme.style.getFloat("horizontal_gap"),
+                    keyboardConfig,
+                    "horizontal_gap",
+                    theme.style.getFloat("horizontal_gap"),
                 ),
             ).toInt()
         verticalGap =
             sp2px(
                 obtainFloat(
-                    keyboardConfig, "vertical_gap", theme.style.getFloat("vertical_gap"),
+                    keyboardConfig,
+                    "vertical_gap",
+                    theme.style.getFloat("vertical_gap"),
                 ),
             ).toInt()
         roundCorner =
             obtainFloat(
-                keyboardConfig, "round_corner", theme.style.getFloat("round_corner"),
+                keyboardConfig,
+                "round_corner",
+                theme.style.getFloat("round_corner"),
             )
         val horizontalGap = horizontalGap
         val verticalGap = verticalGap
         val keyboardHeight = getKeyboardHeight(theme, keyboardConfig)
         val keyboardKeyWidth = obtainFloat(keyboardConfig, "width", 0f)
         val maxColumns = if (columns == -1) Int.MAX_VALUE else columns
-        val background = theme.colors.getDrawable(keyboardConfig, "keyboard_back_color")
-        if (background != null) this.background = background
         var x = this.horizontalGap / 2
         var y = this.verticalGap
         var row = 0
@@ -361,13 +372,17 @@ class Keyboard() {
                 key.key_symbol_offset_x =
                     sp2px(
                         obtainFloat(
-                            mk, "key_symbol_offset_x", defaultKeySymbolOffsetX.toFloat(),
+                            mk,
+                            "key_symbol_offset_x",
+                            defaultKeySymbolOffsetX.toFloat(),
                         ),
                     ).toInt()
                 key.key_symbol_offset_y =
                     sp2px(
                         obtainFloat(
-                            mk, "key_symbol_offset_y", defaultKeySymbolOffsetY.toFloat(),
+                            mk,
+                            "key_symbol_offset_y",
+                            defaultKeySymbolOffsetY.toFloat(),
                         ),
                     ).toInt()
                 key.key_hint_offset_x =
@@ -620,10 +635,12 @@ class Keyboard() {
         val keyboardSidePaddingLandscape = theme.style.getInt("keyboard_padding_land")
 
         val keyboardSidePaddingPx =
-            when (appContext.resources.configuration.orientation) {
-                Configuration.ORIENTATION_LANDSCAPE -> keyboardSidePaddingLandscape
-                else -> keyboardSidePadding
-            }.apply { appContext.dp(this) }
+            appContext.dp(
+                when (appContext.resources.configuration.orientation) {
+                    Configuration.ORIENTATION_LANDSCAPE -> keyboardSidePaddingLandscape
+                    else -> keyboardSidePadding
+                },
+            )
 
         mDisplayWidth = ScreenUtils.getAppScreenWidth() - 2 * keyboardSidePaddingPx
 
@@ -637,7 +654,6 @@ class Keyboard() {
         mProximityThreshold = (keyWidth * SEARCH_DISTANCE).toInt()
         mProximityThreshold *= mProximityThreshold // Square it for comparison
         roundCorner = theme.style.getFloat("round_corner")
-        background = theme.colors.getDrawable("keyboard_back_color")
         mKeys = ArrayList()
         composingKeys = ArrayList()
     }

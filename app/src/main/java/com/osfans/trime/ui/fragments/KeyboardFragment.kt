@@ -38,25 +38,18 @@ class KeyboardFragment :
         sharedPreferences: SharedPreferences?,
         key: String?,
     ) {
-        val trime = Trime.getServiceOrNull()
         when (key) {
             "keyboard__key_long_press_timeout",
             "keyboard__key_repeat_interval",
             "keyboard__show_key_popup",
+            AppPrefs.Keyboard.SPLIT, AppPrefs.Keyboard.SPLIT_SPACE_PERCENT,
+            "keyboard__show_window",
+            "keyboard__inline_preedit", "keyboard__soft_cursor",
             -> {
-                trime?.resetKeyboard()
-            }
-            AppPrefs.Keyboard.SPLIT, AppPrefs.Keyboard.SPLIT_SPACE_PERCENT -> {
-                trime?.initKeyboard()
-            }
-            "keyboard__show_window" -> {
-                trime?.resetCandidate()
-            }
-            "keyboard__inline_preedit", "keyboard__soft_cursor" -> {
-                trime?.loadConfig()
+                Trime.getServiceOrNull()?.recreateInputView()
             }
             "keyboard__candidate_page_size" -> {
-                val pageSize = AppPrefs.defaultInstance().keyboard.candidatePageSize.toInt()
+                val pageSize = AppPrefs.defaultInstance().keyboard.candidatePageSize
                 if (pageSize <= 0) return
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) {

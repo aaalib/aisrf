@@ -12,26 +12,13 @@
       "filters": [
         {
           "filterType": "ABI",
-          "value": "x86"
-        }
-      ],
-      "attributes": [],
-      "versionCode": 20240301,
-      "versionName": "3.2.17",
-      "outputFile": "aisrf.com-nightly-2-g48da4e4a-x86-release.apk"
-    },
-    {
-      "type": "ONE_OF_MANY",
-      "filters": [
-        {
-          "filterType": "ABI",
           "value": "arm64-v8a"
         }
       ],
       "attributes": [],
       "versionCode": 20240301,
       "versionName": "3.2.17",
-      "outputFile": "aisrf.com-nightly-2-g48da4e4a-arm64-v8a-release.apk"
+      "outputFile": "aisrf.com-nightly-3-g12c9acb0-arm64-v8a-release.apk"
     }
   ],
   "elementType": "File"

@@ -16,7 +16,7 @@ android {
     namespace = "com.osfans.trime"
     compileSdk = 34
     buildToolsVersion = "34.0.0"
-
+//    ndkVersion="21.3.6528147"//
     defaultConfig {
         applicationId  = "aisrf.com"
         minSdk = 21
@@ -31,7 +31,16 @@ android {
         buildConfigField("String", "BUILD_COMMIT_HASH", "\"${project.buildCommitHash}\"")
         buildConfigField("String", "BUILD_GIT_REPO", "\"${project.buildGitRepo}\"")
         buildConfigField("String", "BUILD_VERSION_NAME", "\"${project.buildVersionName}\"")
+
+//        ndk {
+//            // 设置支持的SO库(armeabi, armeabi-v7a, arm64-v8a, and x86)
+//            abiFilters.add("armeabi-v7a")
+////            abiFilters.add("arm64-v8a")
+//        }
     }
+
+
+
 
     buildTypes {
         release {

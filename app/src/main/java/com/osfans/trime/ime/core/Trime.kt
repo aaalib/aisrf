@@ -28,10 +28,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.text.InputType
-import android.text.TextUtils
-import android.view.Gravity
 import android.view.KeyEvent
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
@@ -40,6 +37,7 @@ import android.view.inputmethod.CursorAnchorInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import androidx.annotation.Keep
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
@@ -48,9 +46,8 @@ import com.osfans.trime.R
 import com.osfans.trime.core.Rime
 import com.osfans.trime.data.AppPrefs
 import com.osfans.trime.data.db.DraftHelper
-import com.osfans.trime.data.sound.SoundThemeManager
+import com.osfans.trime.data.theme.ColorManager
 import com.osfans.trime.data.theme.ThemeManager
-import com.osfans.trime.databinding.CompositionRootBinding
 import com.osfans.trime.ime.broadcast.IntentReceiver
 import com.osfans.trime.ime.enums.Keycode
 import com.osfans.trime.ime.enums.SymbolKeyboardType
@@ -66,22 +63,19 @@ import com.osfans.trime.ime.lifecycle.LifecycleInputMethodService
 import com.osfans.trime.ime.symbol.TabManager
 import com.osfans.trime.ime.symbol.TabView
 import com.osfans.trime.ime.text.Candidate
-import com.osfans.trime.ime.text.Composition
 import com.osfans.trime.ime.text.CompositionPopupWindow
 import com.osfans.trime.ime.text.ScrollView
 import com.osfans.trime.ime.text.TextInputManager
 import com.osfans.trime.util.ShortcutUtils
 import com.osfans.trime.util.StringUtils
-import com.osfans.trime.util.ViewUtils
 import com.osfans.trime.util.WeakHashSet
 import com.osfans.trime.util.isNightMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import splitties.bitflags.hasFlag
-import splitties.dimensions.dp
 import splitties.systemservices.inputMethodManager
+import splitties.views.gravityBottom
 import timber.log.Timber
-import java.util.Objects
 
 /** [輸入法][InputMethodService]主程序  */
 
@@ -92,40 +86,26 @@ open class Trime : LifecycleInputMethodService() {
         get() = AppPrefs.defaultInstance()
     private var mainKeyboardView: KeyboardView? = null // 主軟鍵盤
     private var mCandidate: Candidate? = null // 候選
-    private var mComposition: Composition? = null // 編碼
-    private var compositionRootBinding: CompositionRootBinding? = null
-    private var mCandidateRoot: ScrollView? = null
     private var mTabRoot: ScrollView? = null
     private var tabView: TabView? = null
     var inputView: InputView? = null
     private var eventListeners = WeakHashSet<EventListener>()
-    var inputFeedbackManager: InputFeedbackManager? = null // 效果管理器
     private var mIntentReceiver: IntentReceiver? = null
-    private var editorInfo: EditorInfo? = null
     private var isWindowShown = false // 键盘窗口是否已显示
     private var isAutoCaps = false // 句首自動大寫
     var activeEditorInstance: EditorInstance? = null
     var textInputManager: TextInputManager? = null // 文字输入管理器
-    private var minPopupSize = 0 // 上悬浮窗的候选词的最小词长
-    private var minPopupCheckSize = 0 // 第一屏候选词数量少于设定值，则候选词上悬浮窗。（也就是说，第一屏存在长词）此选项大于1时，min_length等参数失效
     private var mCompositionPopupWindow: CompositionPopupWindow? = null
-    private var candidateExPage = false
+    var candidateExPage = false
 
     @Keep
-    private val onThemeChangeListener =
-        ThemeManager.OnThemeChangeListener {
+    private val onColorChangeListener =
+        ColorManager.OnColorChangeListener {
             lifecycleScope.launch(Dispatchers.Main) {
-                initKeyboard()
+                recreateInputView()
+                inputView?.startInput(currentInputEditorInfo)
             }
         }
-
-    fun hasCandidateExPage(): Boolean {
-        return candidateExPage
-    }
-
-    fun setCandidateExPage(value: Boolean) {
-        candidateExPage = value
-    }
 
     init {
         try {
@@ -181,12 +161,9 @@ open class Trime : LifecycleInputMethodService() {
 
     fun loadConfig() {
         val theme = ThemeManager.activeTheme
-        minPopupSize = theme.style.getInt("layout/min_length")
-        minPopupCheckSize = theme.style.getInt("layout/min_check")
         textInputManager!!.shouldResetAsciiMode = theme.style.getBoolean("reset_ascii_mode")
         isAutoCaps = theme.style.getBoolean("auto_caps")
         textInputManager!!.shouldUpdateRimeOption = true
-        mCompositionPopupWindow!!.loadConfig(theme, prefs)
     }
 
     private fun updateRimeOption(): Boolean {
@@ -239,14 +216,13 @@ open class Trime : LifecycleInputMethodService() {
             //  and lead to a crash loop
             Timber.d("onCreate")
             val context: InputMethodService = this
-            ThemeManager.addOnChangedListener(onThemeChangeListener)
+            ColorManager.addOnChangedListener(onColorChangeListener)
             RimeWrapper.startup {
                 Timber.d("Running Trime.onCreate")
-                ThemeManager.init(resources.configuration)
+                ColorManager.init(resources.configuration)
                 textInputManager = TextInputManager.getInstance()
                 activeEditorInstance = EditorInstance(context)
-                inputFeedbackManager = InputFeedbackManager(context)
-                mCompositionPopupWindow = CompositionPopupWindow()
+                InputFeedbackManager.init(this)
                 restartSystemStartTimingSync()
                 try {
                     for (listener in eventListeners) {
@@ -280,12 +256,13 @@ open class Trime : LifecycleInputMethodService() {
             inputView!!.switchUiByState(KeyboardWindow.State.Symbol)
             symbolKeyboardType = inputView!!.liquidKeyboard.select(tabIndex)
             tabView!!.updateTabWidth()
-            mTabRoot!!.move(tabView!!.hightlightLeft, tabView!!.hightlightRight)
-            showLiquidKeyboardToolbar()
+            mTabRoot!!.move(tabView!!.highlightLeft, tabView!!.highlightRight)
+            mCompositionPopupWindow?.composition?.compositionView?.changeToLiquidKeyboardToolbar()
+            showCompositionView(false)
         } else {
             symbolKeyboardType = SymbolKeyboardType.NO_KEY
             // 设置液体键盘处于隐藏状态
-            TabManager.get().setTabExited()
+            TabManager.setTabExited()
             inputView!!.switchUiByState(KeyboardWindow.State.Main)
             updateComposing()
         }
@@ -298,182 +275,104 @@ open class Trime : LifecycleInputMethodService() {
         } else if (name.matches("[A-Z]+".toRegex())) {
             selectLiquidKeyboard(SymbolKeyboardType.valueOf(name))
         } else {
-            selectLiquidKeyboard(TabManager.getTagIndex(name))
+            selectLiquidKeyboard(TabManager.tabTags.indexOfFirst { it.text == name })
         }
     }
 
-    fun selectLiquidKeyboard(type: SymbolKeyboardType?) {
-        selectLiquidKeyboard(TabManager.getTagIndex(type))
+    fun selectLiquidKeyboard(type: SymbolKeyboardType) {
+        selectLiquidKeyboard(TabManager.tabTags.indexOfFirst { it.type == type })
     }
 
     fun pasteByChar() {
-        commitTextByChar(Objects.requireNonNull(ShortcutUtils.pasteFromClipboard(this)).toString())
+        commitTextByChar(checkNotNull(ShortcutUtils.pasteFromClipboard(this)).toString())
     }
 
     private fun showCompositionView(isCandidate: Boolean) {
-        if (TextUtils.isEmpty(Rime.compositionText) && isCandidate) {
+        if (Rime.compositionText.isEmpty() && isCandidate) {
             mCompositionPopupWindow!!.hideCompositionView()
             return
         }
-        compositionRootBinding!!.compositionRoot.measure(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        )
-        mCompositionPopupWindow!!.updateCompositionView(
-            compositionRootBinding!!.compositionRoot.measuredWidth,
-            compositionRootBinding!!.compositionRoot.measuredHeight,
-        )
+        mCompositionPopupWindow?.updateCompositionView()
     }
 
-    private fun loadBackground(recreate: Boolean) {
-        val theme = ThemeManager.activeTheme
-        val textBackground =
-            theme.colors.getDrawable(
-                "text_back_color",
-                "layout/border",
-                "border_color",
-                "layout/round_corner",
-                "layout/alpha",
-            )
-        mCompositionPopupWindow!!.setThemeStyle(
-            dp(theme.style.getFloat("layout/elevation")),
-            textBackground,
-        )
+    /** Must be called on the UI thread
+     *
+     * 重置鍵盤、候選條、狀態欄等 !!注意，如果其中調用Rime.setOption，切換方案會卡住  */
+    fun recreateInputView() {
+        inputView = InputView(this, Rime.getInstance(false))
+        mainKeyboardView = inputView!!.keyboardWindow.oldMainInputView.mainKeyboardView
+        // 初始化候选栏
+        mCandidate = inputView!!.quickBar.oldCandidateBar.candidates
+        mTabRoot = inputView!!.quickBar.oldTabBar.root
+        tabView = inputView!!.quickBar.oldTabBar.tabs
 
-        if (inputView == null || !recreate) return
+        mCompositionPopupWindow =
+            CompositionPopupWindow(this, ThemeManager.activeTheme).apply {
+                anchorView = inputView?.quickBar?.view
+            }.apply { hideCompositionView() }
 
-        inputView?.quickBar?.view?.background =
-            theme.colors.getDrawable(
-                "candidate_background",
-                "candidate_border",
-                "candidate_border_color",
-                "candidate_border_round",
-                null,
-            )
-
-        inputView?.keyboardView?.background = theme.colors.getDrawable("root_background")
-
-        tabView!!.reset()
-    }
-
-    fun resetKeyboard() {
-        if (mainKeyboardView != null) {
-            mainKeyboardView!!.setShowHint(!Rime.getOption("_hide_key_hint"))
-            mainKeyboardView!!.setShowSymbol(!Rime.getOption("_hide_key_symbol"))
-            mainKeyboardView!!.reset() // 實體鍵盤無軟鍵盤
-        }
-    }
-
-    fun resetCandidate() {
-        if (mCandidateRoot != null) {
-            loadBackground(true)
-            setShowComment(!Rime.getOption("_hide_comment"))
-            inputView?.quickBar?.view?.visibility =
-                if (!Rime.getOption("_hide_candidate") || !Rime.getOption("_hide_bar")) {
-                    View.VISIBLE
-                } else {
-                    View.GONE
-                }
-            mCandidate!!.reset()
-            mCompositionPopupWindow!!.isPopupWindowEnabled = (
-                prefs.keyboard.popupWindowEnabled &&
-                    ThemeManager.activeTheme.style.getObject("window") != null
-            )
-            mComposition!!.visibility = if (mCompositionPopupWindow!!.isPopupWindowEnabled) View.VISIBLE else View.GONE
-            mComposition!!.reset()
-        }
-    }
-
-    /** 重置鍵盤、候選條、狀態欄等 !!注意，如果其中調用Rime.setOption，切換方案會卡住  */
-    private fun reset() {
-        if (inputView == null) return
-        inputView!!.switchUiByState(KeyboardWindow.State.Main)
         loadConfig()
-        val theme = ThemeManager.activeTheme
-        theme.refreshColorValues()
-        SoundThemeManager.switchSound(theme.colors.getString("sound"))
-        resetCandidate()
         KeyboardSwitcher.newOrReset()
-        mCompositionPopupWindow!!.hideCompositionView()
-        resetKeyboard()
-    }
-
-    /** Must be called on the UI thread  */
-    fun initKeyboard() {
         if (textInputManager != null) {
-            reset()
-            // setNavBarColor();
             textInputManager!!.shouldUpdateRimeOption = true // 不能在Rime.onMessage中調用set_option，會卡死
             bindKeyboardToInputView()
-            // loadBackground(); // reset()调用过resetCandidate()，resetCandidate()一键调用过loadBackground();
             updateComposing() // 切換主題時刷新候選
         }
+        setInputView(inputView!!)
     }
 
     override fun onDestroy() {
         if (mIntentReceiver != null) mIntentReceiver!!.unregisterReceiver(this)
         mIntentReceiver = null
-        if (inputFeedbackManager != null) inputFeedbackManager!!.destroy()
-        inputFeedbackManager = null
+        InputFeedbackManager.destroy()
         inputView = null
         for (listener in eventListeners) {
             listener.onDestroy()
         }
         eventListeners.clear()
-        if (mCompositionPopupWindow != null) {
-            mCompositionPopupWindow!!.destroy()
-        }
-        ThemeManager.removeOnChangedListener(onThemeChangeListener)
+        mCompositionPopupWindow?.finishInput()
+        ColorManager.removeOnChangedListener(onColorChangeListener)
         super.onDestroy()
         self = null
     }
 
     private fun handleReturnKey() {
-        if (editorInfo == null) {
-            sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
-            return
-        }
-        if (editorInfo!!.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_NULL) {
-            sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
-            return
-        }
-        if (editorInfo!!.imeOptions.hasFlag(EditorInfo.IME_FLAG_NO_ENTER_ACTION)) {
-            val ic = currentInputConnection
-            ic?.commitText("\n", 1)
-            return
-        }
-        if (!TextUtils.isEmpty(editorInfo!!.actionLabel) &&
-            editorInfo!!.actionId != EditorInfo.IME_ACTION_UNSPECIFIED
-        ) {
-            val ic = currentInputConnection
-            ic?.performEditorAction(editorInfo!!.actionId)
-            return
-        }
-        val action = editorInfo!!.imeOptions and EditorInfo.IME_MASK_ACTION
-        val ic = currentInputConnection
-        when (action) {
-            EditorInfo.IME_ACTION_UNSPECIFIED, EditorInfo.IME_ACTION_NONE -> ic?.commitText("\n", 1)
-            else -> ic?.performEditorAction(action)
+        currentInputEditorInfo.run {
+            if (inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_NULL) {
+                sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
+                return
+            }
+            if (imeOptions.hasFlag(EditorInfo.IME_FLAG_NO_ENTER_ACTION)) {
+                val ic = currentInputConnection
+                ic?.commitText("\n", 1)
+                return
+            }
+            if (!actionLabel.isNullOrEmpty() && actionId != EditorInfo.IME_ACTION_UNSPECIFIED
+            ) {
+                currentInputConnection.performEditorAction(actionId)
+                return
+            }
+            when (val action = imeOptions and EditorInfo.IME_MASK_ACTION) {
+                EditorInfo.IME_ACTION_UNSPECIFIED, EditorInfo.IME_ACTION_NONE -> currentInputConnection.commitText("\n", 1)
+                else -> currentInputConnection.performEditorAction(action)
+            }
         }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         val config = resources.configuration
+        // 屏幕方向改变时会重置 inputView，不用在这里重置键盘
         if (config.orientation != newConfig.orientation) {
             // Clear composing text and candidates for orientation change.
             performEscape()
-            config.orientation = newConfig.orientation
         }
         super.onConfigurationChanged(newConfig)
-        ThemeManager.onSystemNightModeChange(newConfig.isNightMode())
-        initKeyboard()
+        ColorManager.onSystemNightModeChange(newConfig.isNightMode())
     }
 
     override fun onUpdateCursorAnchorInfo(cursorAnchorInfo: CursorAnchorInfo) {
         mCompositionPopupWindow!!.updateCursorAnchorInfo(cursorAnchorInfo)
-        if (mCandidateRoot != null) {
-            showCompositionView(true)
-        }
+        showCompositionView(true)
     }
 
     override fun onUpdateSelection(
@@ -519,29 +418,9 @@ open class Trime : LifecycleInputMethodService() {
     }
 
     override fun onCreateInputView(): View {
-        Timber.d("onCreateInputView()")
+        Timber.d("onCreateInputView")
         RimeWrapper.runAfterStarted {
-            inputView = InputView(this, Rime.getInstance(false), ThemeManager.activeTheme)
-            mainKeyboardView = inputView!!.keyboardWindow.oldMainInputView.mainKeyboardView
-            // 初始化候选栏
-            mCandidateRoot = inputView!!.quickBar.oldCandidateBar.root
-            mCandidate = inputView!!.quickBar.oldCandidateBar.candidates
-
-            // 候选词悬浮窗的容器
-            compositionRootBinding = CompositionRootBinding.inflate(LayoutInflater.from(this))
-            mComposition = compositionRootBinding!!.compositions
-            mCompositionPopupWindow!!.init(compositionRootBinding!!.compositionRoot, mCandidateRoot!!)
-            mTabRoot = inputView!!.quickBar.oldTabBar.root
-
-            tabView = inputView!!.quickBar.oldTabBar.tabs
-            for (listener in eventListeners) {
-                listener.onInitializeInputUi(inputView!!)
-            }
-            loadBackground(false)
-            KeyboardSwitcher.newOrReset()
-            bindKeyboardToInputView()
-            setInputView(inputView!!)
-            Timber.d("onCreateInputView - completely ended")
+            recreateInputView()
         }
         Timber.d("onCreateInputView() finish")
         return InitializationUi(this).root
@@ -568,28 +447,14 @@ open class Trime : LifecycleInputMethodService() {
         win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
-    fun setShowComment(showComment: Boolean) {
-        if (mCandidateRoot != null) mCandidate!!.setShowComment(showComment)
-        mComposition!!.setShowComment(showComment)
-    }
-
-    override fun onStartInput(
-        attribute: EditorInfo,
-        restarting: Boolean,
-    ) {
-        editorInfo = attribute
-        Timber.d("onStartInput: restarting=%s", restarting)
-    }
-
     override fun onStartInputView(
         attribute: EditorInfo,
         restarting: Boolean,
     ) {
         Timber.d("onStartInputView: restarting=%s", restarting)
-        editorInfo = attribute
         RimeWrapper.runAfterStarted {
-            inputFeedbackManager!!.resumeSoundPool()
-            inputFeedbackManager!!.resetPlayProgress()
+            InputFeedbackManager.loadSoundEffects()
+            InputFeedbackManager.resetPlayProgress()
             for (listener in eventListeners) {
                 listener.onStartInputView(activeEditorInstance!!, restarting)
             }
@@ -597,18 +462,8 @@ open class Trime : LifecycleInputMethodService() {
                 showStatusIcon(R.drawable.ic_trime_status) // 狀態欄圖標
             }
             bindKeyboardToInputView()
-            // if (!restarting) setNavBarColor();
             setCandidatesViewShown(!Rime.isEmpty) // 軟鍵盤出現時顯示候選欄
-            if (attribute.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION
-                == EditorInfo.IME_FLAG_NO_ENTER_ACTION
-            ) {
-                mainKeyboardView!!.resetEnterLabel()
-            } else {
-                mainKeyboardView!!.setEnterLabel(
-                    attribute.imeOptions and EditorInfo.IME_MASK_ACTION,
-                    attribute.actionLabel,
-                )
-            }
+            inputView?.startInput(attribute, restarting)
             when (attribute.inputType and InputType.TYPE_MASK_VARIATION) {
                 InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
                 InputType.TYPE_TEXT_VARIATION_PASSWORD,
@@ -685,33 +540,24 @@ open class Trime : LifecycleInputMethodService() {
                 DraftHelper.onInputEventChanged()
             }
             try {
-                // Dismiss any pop-ups when the input-view is being finished and hidden.
-                mainKeyboardView!!.closing()
                 performEscape()
-                if (inputFeedbackManager != null) {
-                    inputFeedbackManager!!.releaseSoundPool()
-                }
                 mCompositionPopupWindow!!.hideCompositionView()
             } catch (e: Exception) {
                 Timber.e(e, "Failed to show the PopupWindow.")
             }
         }
-        if (inputView != null) {
-            inputView!!.finishInput()
-        }
+        InputFeedbackManager.finishInput()
+        inputView?.finishInput()
         Timber.d("OnFinishInputView")
     }
 
-    override fun onFinishInput() {
-        editorInfo = null
-        super.onFinishInput()
-    }
-
     fun bindKeyboardToInputView() {
-        if (mainKeyboardView != null) {
+        if (mainKeyboardView == null) return
+        KeyboardSwitcher.currentKeyboard.let {
             // Bind the selected keyboard to the input view.
-            val sk = KeyboardSwitcher.currentKeyboard
-            mainKeyboardView!!.keyboard = sk
+            if (it != mainKeyboardView!!.keyboard) {
+                mainKeyboardView!!.keyboard = it
+            }
             dispatchCapsStateToInputView()
         }
     }
@@ -1030,20 +876,22 @@ open class Trime : LifecycleInputMethodService() {
     fun updateComposing(): Int {
         val ic = currentInputConnection
         activeEditorInstance!!.updateComposingText()
-        if (ic != null && !mCompositionPopupWindow!!.isWinFixed()) {
+        if (ic != null && mCompositionPopupWindow?.isWinFixed() == false) {
             mCompositionPopupWindow!!.isCursorUpdated = ic.requestCursorUpdates(1)
         }
         var startNum = 0
-        if (mCandidateRoot != null) {
-            if (mCompositionPopupWindow!!.isPopupWindowEnabled) {
-                Timber.d("updateComposing() SymbolKeyboardType=%s", symbolKeyboardType.toString())
+        if (mCandidate != null) {
+            if (mCompositionPopupWindow?.isPopupWindowEnabled == true) {
+                Timber.d("updateComposing: symbolKeyboardType: ${symbolKeyboardType.name}")
+                val composition = mCompositionPopupWindow!!.composition
                 if (symbolKeyboardType != SymbolKeyboardType.NO_KEY &&
                     symbolKeyboardType != SymbolKeyboardType.CANDIDATE
                 ) {
-                    showLiquidKeyboardToolbar()
+                    composition.compositionView.changeToLiquidKeyboardToolbar()
+                    showCompositionView(false)
                 } else {
-                    mComposition!!.visibility = View.VISIBLE
-                    startNum = mComposition!!.setWindow(minPopupSize, minPopupCheckSize, Int.MAX_VALUE)
+                    composition.root.visibility = View.VISIBLE
+                    startNum = composition.compositionView.setWindowContent()
                     mCandidate!!.setText(startNum)
                     // if isCursorUpdated, showCompositionView will be called in onUpdateCursorAnchorInfo
                     // otherwise we need to call it here
@@ -1052,18 +900,12 @@ open class Trime : LifecycleInputMethodService() {
             } else {
                 mCandidate!!.setText(0)
             }
-            mCandidate!!.setExpectWidth(mainKeyboardView!!.width)
             // 刷新候选词后，如果候选词超出屏幕宽度，滚动候选栏
-            mTabRoot!!.move(mCandidate!!.highlightLeft, mCandidate!!.highlightRight)
+            mTabRoot?.move(mCandidate!!.highlightLeft, mCandidate!!.highlightRight)
         }
-        if (mainKeyboardView != null) mainKeyboardView!!.invalidateComposingKeys()
+        mainKeyboardView?.invalidateComposingKeys()
         if (!onEvaluateInputViewShown()) setCandidatesViewShown(textInputManager!!.isComposable) // 實體鍵盤打字時顯示候選欄
         return startNum
-    }
-
-    private fun showLiquidKeyboardToolbar() {
-        mComposition!!.changeToLiquidKeyboardToolbar()
-        showCompositionView(false)
     }
 
     /**
@@ -1127,22 +969,18 @@ open class Trime : LifecycleInputMethodService() {
                 } else {
                     WindowManager.LayoutParams.MATCH_PARENT
                 }
-            val inputArea = w.findViewById<View>(android.R.id.inputArea)
-            // TODO: 需要获取到文本编辑框、完成按钮，设置其色彩和尺寸。
-            //      if (isFullscreenMode()) {
-            //        Timber.d("isFullscreenMode");
-            //        /* In Fullscreen mode, when layout contains transparent color,
-            //         * the background under input area will disturb users' typing,
-            //         * so set the input area as light pink */
-            //        inputArea.setBackgroundColor(parseColor("#ff660000"));
-            //      } else {
-            //        Timber.d("NotFullscreenMode");
-            //        /* Otherwise, set it as light gray to avoid potential issue */
-            //        inputArea.setBackgroundColor(parseColor("#dddddddd"));
-            //      }
-            ViewUtils.updateLayoutHeightOf(inputArea, layoutHeight)
-            ViewUtils.updateLayoutGravityOf(inputArea, Gravity.BOTTOM)
-            ViewUtils.updateLayoutHeightOf(inputView!!, layoutHeight)
+            val inputArea = w.decorView.findViewById<FrameLayout>(android.R.id.inputArea)
+            inputArea.updateLayoutParams {
+                height = layoutHeight
+                if (this is FrameLayout.LayoutParams) {
+                    this.gravity = inputArea.gravityBottom
+                } else if (this is LinearLayout.LayoutParams) {
+                    this.gravity = inputArea.gravityBottom
+                }
+            }
+            inputView?.updateLayoutParams {
+                height = layoutHeight
+            }
         }
     }
 

@@ -13,6 +13,7 @@ import com.osfans.trime.core.RimeNotification
 import com.osfans.trime.core.SchemaListItem
 import com.osfans.trime.data.AppPrefs
 import com.osfans.trime.data.schema.SchemaManager
+import com.osfans.trime.data.theme.EventManager
 import com.osfans.trime.data.theme.ThemeManager
 import com.osfans.trime.ime.broadcast.IntentReceiver
 import com.osfans.trime.ime.core.EditorInstance
@@ -22,6 +23,7 @@ import com.osfans.trime.ime.enums.Keycode
 import com.osfans.trime.ime.enums.Keycode.Companion.toStdKeyEvent
 import com.osfans.trime.ime.enums.SymbolKeyboardType
 import com.osfans.trime.ime.keyboard.Event
+import com.osfans.trime.ime.keyboard.InputFeedbackManager
 import com.osfans.trime.ime.keyboard.Keyboard
 import com.osfans.trime.ime.keyboard.KeyboardSwitcher
 import com.osfans.trime.ime.keyboard.KeyboardView
@@ -60,8 +62,6 @@ class TextInputManager private constructor() :
             get() = trime.activeEditorInstance as EditorInstance
         private var intentReceiver: IntentReceiver? = null
         private var rimeNotiHandlerJob: Job? = null
-
-        private var mainKeyboardView: KeyboardView? = null
 
         val locales = Array(2) { Locale.getDefault() }
 
@@ -199,11 +199,8 @@ class TextInputManager private constructor() :
                     }
                 }
 
-            KeyboardSwitcher.run {
-                resize(trime.maxWidth)
-                // Select a keyboard based on the input type of the editing field.
-                switchKeyboard(keyboardType)
-            }
+            // Select a keyboard based on the input type of the editing field.
+            KeyboardSwitcher.switchKeyboard(keyboardType)
             Rime.getInstance()
 
             // style/reset_ascii_mode指定了弹出键盘时是否重置ASCII状态。
@@ -223,13 +220,13 @@ class TextInputManager private constructor() :
             if (notification is RimeNotification.SchemaNotification) {
                 SchemaManager.init(notification.schemaId)
                 Rime.updateStatus()
-                trime.initKeyboard()
+                trime.recreateInputView()
             } else if (notification is RimeNotification.OptionNotification) {
                 Rime.updateContext() // 切換中英文、簡繁體時更新候選
                 val value = notification.value
                 when (val option = notification.option) {
                     "ascii_mode" -> {
-                        trime.inputFeedbackManager?.ttsLanguage =
+                        InputFeedbackManager.ttsLanguage =
                             locales[if (value) 1 else 0]
                     }
                     "_hide_bar",
@@ -248,7 +245,7 @@ class TextInputManager private constructor() :
                         } else if (option.startsWith("_key_") && option.length > 5 && value) {
                             shouldUpdateRimeOption = false // 防止在 handleRimeNotification 中 setOption
                             val key = option.substring(5)
-                            onEvent(Event(key))
+                            onEvent(EventManager.getEvent(key))
                             shouldUpdateRimeOption = true
                         }
                 }
@@ -256,8 +253,8 @@ class TextInputManager private constructor() :
         }
 
         override fun onPress(keyEventCode: Int) {
-            trime.inputFeedbackManager?.let {
-                it.keyPressVibrate()
+            InputFeedbackManager.let {
+                it.keyPressVibrate(trime.window.window!!.decorView)
                 it.keyPressSound(keyEventCode)
                 it.keyPressSpeak(keyEventCode)
             }
@@ -290,8 +287,8 @@ class TextInputManager private constructor() :
                 activeEditorInstance.commitText(event.commit, true)
                 return
             }
-            if (event.getText().isNotEmpty()) {
-                onText(event.getText())
+            if (event.getText(KeyboardSwitcher.currentKeyboard).isNotEmpty()) {
+                onText(event.getText(KeyboardSwitcher.currentKeyboard))
                 return
             }
             when (event.code) {
@@ -469,11 +466,11 @@ class TextInputManager private constructor() :
                     }
                     propertyGroupMatcher.matches() -> {
                         target = propertyGroupMatcher.group(1) ?: ""
-                        onEvent(Event(target))
+                        onEvent(EventManager.getEvent(target))
                     }
                     else -> {
                         target = textToParse.substring(0, 1)
-                        onEvent(Event(target))
+                        onEvent(EventManager.getEvent(target))
                     }
                 }
                 textToParse = textToParse.substring(target.length)

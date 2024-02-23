@@ -1,6 +1,6 @@
 package com.osfans.trime.ime.keyboard
 
-import android.inputmethodservice.InputMethodService
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.SoundPool
@@ -9,8 +9,9 @@ import android.os.VibrationEffect
 import android.speech.tts.TextToSpeech
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
+import android.view.View
 import com.osfans.trime.data.AppPrefs
-import com.osfans.trime.data.sound.SoundThemeManager
+import com.osfans.trime.data.sound.SoundEffectManager
 import splitties.systemservices.audioManager
 import splitties.systemservices.vibrator
 import timber.log.Timber
@@ -19,10 +20,8 @@ import java.util.Locale
 /**
  * Manage the key press effects, such as vibration, sound, speaking and so on.
  */
-class InputFeedbackManager(
-    private val ims: InputMethodService,
-) {
-    private val prefs: AppPrefs get() = AppPrefs.defaultInstance()
+object InputFeedbackManager {
+    private val keyboardPrefs get() = AppPrefs.defaultInstance().keyboard
 
     private var tts: TextToSpeech? = null
     private var soundPool: SoundPool? = null
@@ -31,17 +30,9 @@ class InputFeedbackManager(
     private var lastPressedKeycode = 0
     private val soundIds: MutableList<Int> = mutableListOf()
 
-    init {
-        try {
-            tts = TextToSpeech(ims) { }
-            SoundThemeManager.init()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    fun resumeSoundPool() {
-        SoundThemeManager.getActiveSoundFilePaths().onSuccess { path ->
+    fun init(context: Context) {
+        runCatching {
+            tts = TextToSpeech(context, null)
             soundPool =
                 SoundPool.Builder()
                     .setMaxStreams(1)
@@ -50,68 +41,66 @@ class InputFeedbackManager(
                             .setLegacyStreamType(AudioManager.STREAM_SYSTEM)
                             .build(),
                     ).build()
-            soundIds.clear()
-            soundIds.addAll(path.map { soundPool!!.load(it, 1) })
+            SoundEffectManager.init()
+        }.getOrElse {
+            Timber.w(it, "Failed to initialize InputFeedbackManager")
         }
     }
 
-    fun releaseSoundPool() {
-        SoundThemeManager.getActiveSoundTheme().onSuccess {
+    fun loadSoundEffects() {
+        SoundEffectManager.getActiveSoundFilePaths().onSuccess { path ->
+            soundIds.clear()
+            soundIds.addAll(path.map { soundPool?.load(it, 1) ?: 0 })
+        }
+    }
+
+    private fun releaseSoundPool() {
+        SoundEffectManager.getActiveSoundEffect().onSuccess {
             soundPool?.release()
             soundPool = null
         }
     }
 
+    private val hasAmplitudeControl =
+        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) &&
+            vibrator.hasAmplitudeControl()
+
     /**
      * Makes a key press vibration if the user has this feature enabled in the preferences.
      */
-    fun keyPressVibrate() {
-        if (prefs.keyboard.vibrationEnabled) {
-            val vibrationDuration = prefs.keyboard.vibrationDuration.toLong()
-            var vibrationAmplitude = prefs.keyboard.vibrationAmplitude
-
-            val hapticsPerformed =
-                if (vibrationDuration < 0) {
-                    ims.window?.window?.decorView?.performHapticFeedback(
-                        HapticFeedbackConstants.KEYBOARD_TAP,
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING
-                        } else {
-                            @Suppress("DEPRECATION")
-                            HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING or HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING
-                        },
-                    )
+    fun keyPressVibrate(
+        view: View,
+        longPress: Boolean = false,
+    ) {
+        if (keyboardPrefs.vibrationEnabled) {
+            val duration: Long = keyboardPrefs.vibrationDuration.toLong()
+            val amplitude = keyboardPrefs.vibrationAmplitude
+            val hfc =
+                if (longPress) {
+                    HapticFeedbackConstants.LONG_PRESS
                 } else {
-                    false
+                    HapticFeedbackConstants.KEYBOARD_TAP
                 }
 
-            if (hapticsPerformed == true) {
-                return
-            }
-
-            if (vibrationAmplitude > 0) {
-                vibrationAmplitude = (vibrationAmplitude / 2.0).toInt().coerceAtLeast(1)
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(
-                    VibrationEffect.createOneShot(
-                        vibrationDuration,
-                        vibrationAmplitude,
-                    ),
-                )
+            if (duration != 0L) { // use vibrator
+                if (hasAmplitudeControl && amplitude != 0) {
+                    vibrator.vibrate(VibrationEffect.createOneShot(duration, amplitude))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(duration)
+                }
             } else {
                 @Suppress("DEPRECATION")
-                vibrator.vibrate(vibrationDuration)
+                val flags =
+                    HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING or HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+                view.performHapticFeedback(hfc, flags)
             }
         }
     }
 
     /** Text to Speech engine's language getter and setter */
     var ttsLanguage: Locale?
-        get() {
-            return tts?.voice?.locale
-        }
+        get() = tts?.voice?.locale
         set(v) {
             tts?.language = v
         }
@@ -124,10 +113,10 @@ class InputFeedbackManager(
         keycode: Int,
         volume: Float,
     ) {
-        SoundThemeManager.getActiveSoundTheme().onSuccess { theme ->
-            if (theme.sound.isEmpty()) return
-            val sounds = theme.sound
-            val melody = theme.melody
+        SoundEffectManager.getActiveSoundEffect().onSuccess { effect ->
+            if (effect.sound.isEmpty()) return
+            val sounds = effect.sound
+            val melody = effect.melody
             var currentSoundId = 0
             if (playProgress > -1) {
                 if (melody.isNullOrEmpty()) return
@@ -135,7 +124,7 @@ class InputFeedbackManager(
                 playProgress = (playProgress + 1) % melody.size
             } else if (keycode != lastPressedKeycode) {
                 lastPressedKeycode = keycode
-                currentSoundId = theme.keyset.find { it.soundId(keycode) >= 0 }?.soundId(keycode) ?: 0
+                currentSoundId = effect.keyset.find { it.soundId(keycode) >= 0 }?.soundId(keycode) ?: 0
                 Timber.d("play without melody: currentSoundId=$currentSoundId, soundIds.size=${soundIds.size}")
             }
             soundPool?.play(soundIds[currentSoundId], volume, volume, 1, 0, 1f)
@@ -146,10 +135,10 @@ class InputFeedbackManager(
      * Makes a key press sound if the user has this feature enabled in the preferences.
      */
     fun keyPressSound(keyCode: Int = 0) {
-        if (prefs.keyboard.soundEnabled) {
-            val soundVolume = prefs.keyboard.soundVolume / 100f
+        if (keyboardPrefs.soundEnabled) {
+            val soundVolume = keyboardPrefs.soundVolume / 100f
             if (soundVolume <= 0) return
-            if (prefs.keyboard.customSoundEnabled) {
+            if (keyboardPrefs.customSoundEnabled) {
                 playCustomSoundEffect(keyCode, soundVolume)
             } else {
                 val effect =
@@ -171,14 +160,14 @@ class InputFeedbackManager(
      * Makes a key press speaking if the user has this feature enabled in the preferences.
      */
     fun keyPressSpeak(content: Any? = null) {
-        if (prefs.keyboard.isSpeakKey) contentSpeakInternal(content)
+        if (keyboardPrefs.isSpeakKey) contentSpeakInternal(content)
     }
 
     /**
      * Makes a text commit speaking if the user has this feature enabled in the preferences.
      */
     fun textCommitSpeak(text: CharSequence? = null) {
-        if (prefs.keyboard.isSpeakCommit) contentSpeakInternal(text)
+        if (keyboardPrefs.isSpeakCommit) contentSpeakInternal(text)
     }
 
     private inline fun <reified T> contentSpeakInternal(content: T) {
@@ -197,8 +186,13 @@ class InputFeedbackManager(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "TrimeTTS")
     }
 
+    fun finishInput() {
+        releaseSoundPool()
+    }
+
     fun destroy() {
         tts?.stop()
+        tts?.shutdown()
         tts = null
         releaseSoundPool()
     }

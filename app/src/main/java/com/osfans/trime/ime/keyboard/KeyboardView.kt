@@ -43,7 +43,8 @@ import android.widget.TextView
 import com.osfans.trime.R
 import com.osfans.trime.data.AppPrefs
 import com.osfans.trime.data.AppPrefs.Companion.defaultInstance
-import com.osfans.trime.data.theme.FontManager.getTypeface
+import com.osfans.trime.data.theme.ColorManager
+import com.osfans.trime.data.theme.FontManager
 import com.osfans.trime.data.theme.Theme
 import com.osfans.trime.data.theme.ThemeManager
 import com.osfans.trime.databinding.KeyboardKeyPreviewBinding
@@ -52,6 +53,7 @@ import com.osfans.trime.ime.keyboard.Key.Companion.isTrimeModifierKey
 import com.osfans.trime.util.LeakGuardHandlerWrapper
 import com.osfans.trime.util.dp2px
 import com.osfans.trime.util.sp2px
+import splitties.bitflags.hasFlag
 import splitties.systemservices.layoutInflater
 import timber.log.Timber
 import java.lang.reflect.Method
@@ -103,6 +105,20 @@ class KeyboardView(context: Context?, attrs: AttributeSet?) : View(context, attr
          * @param text the sequence of characters to be displayed.
          */
         fun onText(text: CharSequence?)
+    }
+
+    enum class EnterLabelMode {
+        ACTION_LABEL_NEVER,
+        ACTION_LABEL_ONLY,
+        ACTION_LABEL_PREFERRED,
+        CUSTOM_PREFERRED,
+        ;
+
+        companion object {
+            fun fromOrdinal(ordinal: Int) =
+                runCatching { entries[ordinal] }
+                    .getOrDefault(ACTION_LABEL_NEVER)
+        }
     }
 
     private var mKeyboard: Keyboard? = null
@@ -224,9 +240,9 @@ class KeyboardView(context: Context?, attrs: AttributeSet?) : View(context, attr
     private var mShowSymbol = true
     private var findStateDrawableIndex: Method? = null
     private var getStateDrawable: Method? = null
-    private var labelEnter: String? = ""
+    private var labelEnter: String? = "⏎"
     private var mEnterLabels: MutableMap<String, String?>? = null
-    private var enterLabelMode = 0
+    private var enterLabelMode = EnterLabelMode.ACTION_LABEL_NEVER
 
     fun setShowHint(value: Boolean) {
         mShowHint = value
@@ -236,75 +252,63 @@ class KeyboardView(context: Context?, attrs: AttributeSet?) : View(context, attr
         mShowSymbol = value
     }
 
-    fun resetEnterLabel() {
-        labelEnter = mEnterLabels!!["default"]
-    }
-
     fun setOnKeyboardActionListener(listener: OnKeyboardActionListener?) {
         onKeyboardActionListener = listener
     }
 
     private fun handleEnterLabel(theme: Theme) {
         mEnterLabels = theme.style.getObject("enter_labels") as MutableMap<String, String?>?
-        if (mEnterLabels == null) {
-            mEnterLabels = HashMap()
-        }
-        val defaultEnterLabel: String?
-        if (mEnterLabels!!.containsKey("default")) {
-            defaultEnterLabel = mEnterLabels!!["default"]
-        } else {
-            defaultEnterLabel = "Enter"
-            mEnterLabels!!["default"] = defaultEnterLabel
-        }
+            ?: hashMapOf()
+        labelEnter = mEnterLabels!!["default"] ?: "⏎".also { mEnterLabels!!["default"] = it }
         for (label in arrayOf("done", "go", "next", "none", "pre", "search", "send")) {
             if (!mEnterLabels!!.containsKey(label)) {
-                mEnterLabels!![label] = defaultEnterLabel
+                mEnterLabels!![label] = labelEnter
             }
         }
     }
 
-    fun setEnterLabel(
-        action: Int,
-        actionLabel: CharSequence?,
-    ) {
-        // enter_label_mode 取值：
-        // 0不使用，1只使用actionlabel，2优先使用，3当其他方式没有获得label时才读取actionlabel
-        if (enterLabelMode == 1) {
-            labelEnter = if (!actionLabel.isNullOrEmpty()) actionLabel.toString() else mEnterLabels!!["default"]
-            return
-        }
-        if (enterLabelMode == 2) {
-            if (!actionLabel.isNullOrEmpty()) {
-                labelEnter = actionLabel.toString()
-                return
-            }
-        }
-        when (action) {
-            EditorInfo.IME_ACTION_DONE -> labelEnter = mEnterLabels!!["done"]
-            EditorInfo.IME_ACTION_GO -> labelEnter = mEnterLabels!!["go"]
-            EditorInfo.IME_ACTION_NEXT -> labelEnter = mEnterLabels!!["next"]
-            EditorInfo.IME_ACTION_PREVIOUS -> labelEnter = mEnterLabels!!["pre"]
-            EditorInfo.IME_ACTION_SEARCH -> labelEnter = mEnterLabels!!["search"]
-            EditorInfo.IME_ACTION_SEND -> labelEnter = mEnterLabels!!["send"]
-            EditorInfo.IME_ACTION_NONE -> {
-                labelEnter = mEnterLabels!!["none"]
-                if (enterLabelMode == 3) {
-                    if (!actionLabel.isNullOrEmpty()) {
-                        labelEnter = actionLabel.toString()
-                        return
-                    }
+    fun updateEnterLabelOnEditorInfo(info: EditorInfo) {
+        if (info.imeOptions.hasFlag(EditorInfo.IME_FLAG_NO_ENTER_ACTION)) {
+            labelEnter = mEnterLabels!!["default"]
+        } else {
+            val action = info.imeOptions and EditorInfo.IME_MASK_ACTION
+            val actionLabel = info.actionLabel
+            when (enterLabelMode) {
+                EnterLabelMode.ACTION_LABEL_ONLY -> {
+                    labelEnter = actionLabel.toString()
                 }
-                labelEnter = mEnterLabels!!["default"]
-            }
-
-            else -> {
-                if (enterLabelMode == 3) {
-                    if (!actionLabel.isNullOrEmpty()) {
-                        labelEnter = actionLabel.toString()
-                        return
-                    }
+                EnterLabelMode.ACTION_LABEL_PREFERRED -> {
+                    labelEnter =
+                        if (!actionLabel.isNullOrEmpty()) {
+                            actionLabel.toString()
+                        } else {
+                            mEnterLabels!!["default"]
+                        }
                 }
-                labelEnter = mEnterLabels!!["default"]
+                EnterLabelMode.CUSTOM_PREFERRED,
+                EnterLabelMode.ACTION_LABEL_NEVER,
+                -> {
+                    labelEnter =
+                        when (action) {
+                            EditorInfo.IME_ACTION_DONE -> mEnterLabels!!["done"]
+                            EditorInfo.IME_ACTION_GO -> mEnterLabels!!["go"]
+                            EditorInfo.IME_ACTION_NEXT -> mEnterLabels!!["next"]
+                            EditorInfo.IME_ACTION_PREVIOUS -> mEnterLabels!!["pre"]
+                            EditorInfo.IME_ACTION_SEARCH -> mEnterLabels!!["search"]
+                            EditorInfo.IME_ACTION_SEND -> mEnterLabels!!["send"]
+                            else -> {
+                                if (enterLabelMode == EnterLabelMode.ACTION_LABEL_NEVER) {
+                                    mEnterLabels!!["default"]
+                                } else {
+                                    if (!actionLabel.isNullOrEmpty()) {
+                                        actionLabel.toString()
+                                    } else {
+                                        mEnterLabels!!["default"]
+                                    }
+                                }
+                            }
+                        }
+                }
             }
         }
     }
@@ -323,16 +327,19 @@ class KeyboardView(context: Context?, attrs: AttributeSet?) : View(context, attr
                         sendMessageDelayed(repeat, prefs.keyboard.repeatInterval.toLong())
                     }
 
-                MSG_LONGPRESS -> mKeyboardView.openPopupIfRequired(msg.obj as MotionEvent)
+                MSG_LONGPRESS -> {
+                    InputFeedbackManager.keyPressVibrate(mKeyboardView, true)
+                    mKeyboardView.openPopupIfRequired(msg.obj as MotionEvent)
+                }
             }
         }
     }
 
     fun reset() {
         val theme = ThemeManager.activeTheme
-        key_symbol_color = theme.colors.getColor("key_symbol_color")!!
-        hilited_key_symbol_color = theme.colors.getColor("hilited_key_symbol_color")!!
-        mShadowColor = theme.colors.getColor("shadow_color")!!
+        key_symbol_color = ColorManager.getColor("key_symbol_color")!!
+        hilited_key_symbol_color = ColorManager.getColor("hilited_key_symbol_color")!!
+        mShadowColor = ColorManager.getColor("shadow_color")!!
         mSymbolSize = sp2px(theme.style.getFloat("symbol_text_size")).toInt()
         mKeyTextSize = sp2px(theme.style.getFloat("key_text_size")).toInt()
         mVerticalCorrection = dp2px(theme.style.getFloat("vertical_correction")).toInt()
@@ -345,27 +352,27 @@ class KeyboardView(context: Context?, attrs: AttributeSet?) : View(context, attr
         mShadowRadius = theme.style.getFloat("shadow_radius")
         val mRoundCorner = theme.style.getFloat("round_corner")
         mKeyBackColor = StateListDrawable()
-        mKeyBackColor!!.addState(Key.KEY_STATE_ON_PRESSED, theme.colors.getDrawable("hilited_on_key_back_color"))
-        mKeyBackColor!!.addState(Key.KEY_STATE_ON_NORMAL, theme.colors.getDrawable("on_key_back_color"))
-        mKeyBackColor!!.addState(Key.KEY_STATE_OFF_PRESSED, theme.colors.getDrawable("hilited_off_key_back_color"))
-        mKeyBackColor!!.addState(Key.KEY_STATE_OFF_NORMAL, theme.colors.getDrawable("off_key_back_color"))
-        mKeyBackColor!!.addState(Key.KEY_STATE_PRESSED, theme.colors.getDrawable("hilited_key_back_color"))
-        mKeyBackColor!!.addState(Key.KEY_STATE_NORMAL, theme.colors.getDrawable("key_back_color"))
+        mKeyBackColor!!.addState(Key.KEY_STATE_ON_PRESSED, ColorManager.getDrawable("hilited_on_key_back_color"))
+        mKeyBackColor!!.addState(Key.KEY_STATE_ON_NORMAL, ColorManager.getDrawable("on_key_back_color"))
+        mKeyBackColor!!.addState(Key.KEY_STATE_OFF_PRESSED, ColorManager.getDrawable("hilited_off_key_back_color"))
+        mKeyBackColor!!.addState(Key.KEY_STATE_OFF_NORMAL, ColorManager.getDrawable("off_key_back_color"))
+        mKeyBackColor!!.addState(Key.KEY_STATE_PRESSED, ColorManager.getDrawable("hilited_key_back_color"))
+        mKeyBackColor!!.addState(Key.KEY_STATE_NORMAL, ColorManager.getDrawable("key_back_color"))
         mKeyTextColor =
             ColorStateList(
                 Key.KEY_STATES,
                 intArrayOf(
-                    theme.colors.getColor("hilited_on_key_text_color")!!,
-                    theme.colors.getColor("on_key_text_color")!!,
-                    theme.colors.getColor("hilited_off_key_text_color")!!,
-                    theme.colors.getColor("off_key_text_color")!!,
-                    theme.colors.getColor("hilited_key_text_color")!!,
-                    theme.colors.getColor("key_text_color")!!,
+                    ColorManager.getColor("hilited_on_key_text_color")!!,
+                    ColorManager.getColor("on_key_text_color")!!,
+                    ColorManager.getColor("hilited_off_key_text_color")!!,
+                    ColorManager.getColor("off_key_text_color")!!,
+                    ColorManager.getColor("hilited_key_text_color")!!,
+                    ColorManager.getColor("key_text_color")!!,
                 ),
             )
-        val color = theme.colors.getColor("preview_text_color")
+        val color = ColorManager.getColor("preview_text_color")
         if (color != null) mPreviewText.setTextColor(color)
-        val previewBackColor = theme.colors.getColor("preview_back_color")
+        val previewBackColor = ColorManager.getColor("preview_back_color")
         if (previewBackColor != null) {
             val background = GradientDrawable()
             background.setColor(previewBackColor)
@@ -375,13 +382,13 @@ class KeyboardView(context: Context?, attrs: AttributeSet?) : View(context, attr
         val mPreviewTextSizeLarge = theme.style.getInt("preview_text_size")
         mPreviewText.textSize = mPreviewTextSizeLarge.toFloat()
         showPreview = prefs.keyboard.popupKeyPressEnabled
-        mPaint.setTypeface(getTypeface(theme.style.getString("key_font")))
-        mPaintSymbol.setTypeface(getTypeface(theme.style.getString("symbol_font")))
+        mPaint.setTypeface(FontManager.getTypeface("key_font"))
+        mPaintSymbol.setTypeface(FontManager.getTypeface("symbol_font"))
         mPaintSymbol.color = key_symbol_color
         mPaintSymbol.textSize = mSymbolSize.toFloat()
-        mPreviewText.typeface = getTypeface(theme.style.getString("preview_font"))
+        mPreviewText.typeface = FontManager.getTypeface("preview_font")
         handleEnterLabel(theme)
-        enterLabelMode = theme.style.getInt("enter_label_mode")
+        enterLabelMode = EnterLabelMode.fromOrdinal(theme.style.getInt("enter_label_mode"))
         invalidateAllKeys()
     }
 
@@ -561,13 +568,11 @@ class KeyboardView(context: Context?, attrs: AttributeSet?) : View(context, attr
 
     private fun setKeyboardBackground() {
         if (mKeyboard == null) return
-        var d = mPreviewText.background
+        val d = mPreviewText.background
         if (d is GradientDrawable) {
             d.cornerRadius = mKeyboard!!.roundCorner
             mPreviewText.background = d
         }
-        d = mKeyboard!!.background
-        background = d
     }
 
     var keyboard: Keyboard?
@@ -1709,7 +1714,7 @@ class KeyboardView(context: Context?, attrs: AttributeSet?) : View(context, attr
         return true
     }
 
-    fun closing() {
+    fun finishInput() {
         if (mPreviewPopup.isShowing) {
             mPreviewPopup.dismiss()
         }
@@ -1728,7 +1733,7 @@ class KeyboardView(context: Context?, attrs: AttributeSet?) : View(context, attr
 
     public override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        closing()
+        finishInput()
     }
 
     private fun dismissPopupKeyboard() {

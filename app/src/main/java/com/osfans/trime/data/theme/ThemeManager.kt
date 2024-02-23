@@ -1,11 +1,9 @@
 package com.osfans.trime.data.theme
 
-import android.content.res.Configuration
 import androidx.annotation.Keep
 import com.osfans.trime.data.AppPrefs
 import com.osfans.trime.data.DataManager
-import com.osfans.trime.util.WeakHashSet
-import com.osfans.trime.util.isNightMode
+import com.osfans.trime.ime.symbol.TabManager
 import java.io.File
 
 object ThemeManager {
@@ -33,11 +31,10 @@ object ThemeManager {
             ?.toMutableList() ?: mutableListOf()
     }
 
-    val sharedThemes: MutableList<String> = listThemes(DataManager.sharedDataDir)
+    private val sharedThemes: MutableList<String> = listThemes(DataManager.sharedDataDir)
 
-    val userThemes: MutableList<String> = listThemes(DataManager.userDataDir)
+    private val userThemes: MutableList<String> = listThemes(DataManager.userDataDir)
 
-    @JvmStatic
     fun getAllThemes(): List<String> {
         if (DataManager.sharedDataDir.absolutePath == DataManager.userDataDir.absolutePath) {
             return userThemes
@@ -45,68 +42,33 @@ object ThemeManager {
         return sharedThemes + userThemes
     }
 
-    fun refreshThemes() {
+    private fun refreshThemes() {
         sharedThemes.clear()
         userThemes.clear()
         sharedThemes.addAll(listThemes(DataManager.sharedDataDir))
         userThemes.addAll(listThemes(DataManager.userDataDir))
     }
 
-    private lateinit var _activeTheme: Theme
-
-    @JvmStatic
-    var activeTheme: Theme
-        get() = _activeTheme
-        private set(value) {
-            if (_activeTheme == value) return
-            _activeTheme = value
-            fireChange()
-        }
-
-    private var isNightMode = false
-
-    private val onChangeListeners = WeakHashSet<OnThemeChangeListener>()
-
-    @JvmStatic
-    fun addOnChangedListener(listener: OnThemeChangeListener) {
-        onChangeListeners.add(listener)
-    }
-
-    @JvmStatic
-    fun removeOnChangedListener(listener: OnThemeChangeListener) {
-        onChangeListeners.remove(listener)
-    }
-
-    private fun fireChange() {
-        onChangeListeners.forEach { it.onThemeChange(_activeTheme) }
-    }
-
     val prefs = AppPrefs.defaultInstance().theme
 
-    fun setNormalTheme(name: String) {
-        AppPrefs.defaultInstance().theme.selectedTheme = name
-        activeTheme = evalActiveTheme()
-    }
+    // 在初始化 ColorManager 时会被赋值
+    lateinit var activeTheme: Theme
+        private set
 
-    private fun evalActiveTheme(): Theme {
-        return if (prefs.autoDark) {
-            Theme(isNightMode)
-        } else {
-            Theme(false)
+    fun init() = setNormalTheme()
+
+    fun setNormalTheme(name: String = "") {
+        if (name.isNotEmpty()) prefs.selectedTheme = name
+        Theme().let {
+            if (::activeTheme.isInitialized) {
+                if (it == activeTheme) return
+            }
+            activeTheme = it
+            // 由于这里的顺序不能打乱，不适合使用 listener
+            EventManager.refresh()
+            FontManager.refresh()
+            ColorManager.refresh()
+            TabManager.refresh()
         }
-    }
-
-    @JvmStatic
-    fun init(configuration: Configuration) {
-        isNightMode = configuration.isNightMode()
-        _activeTheme = evalActiveTheme()
-    }
-
-    @JvmStatic
-    fun onSystemNightModeChange(isNight: Boolean) {
-        if (isNightMode == isNight) return
-        isNightMode = isNight
-        _activeTheme.switchDarkMode(isNightMode)
-        fireChange()
     }
 }
